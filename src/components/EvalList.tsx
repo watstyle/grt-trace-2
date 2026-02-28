@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { EvalRecord, EvalStatus } from "../mock/entityViewData";
 import { CopyIconButton } from "./CopyIconButton";
-import { GoIcon } from "./Icons";
 
 type EvalListProps = {
   evaluations: EvalRecord[];
@@ -57,7 +56,7 @@ function statusClasses(status: EvalStatus): string {
     return "border-rose-500/50 bg-rose-500/10 text-rose-300";
   }
   if (status === "UNKNOWN") {
-    return "border-zinc-500/50 bg-zinc-500/10 text-zinc-300";
+    return "border-[#3b4353] bg-[#1b202b] text-zinc-300";
   }
   return "border-emerald-500/50 bg-emerald-500/10 text-emerald-300";
 }
@@ -139,7 +138,7 @@ export function EvalList({ evaluations, onOpenEval, onViewJson, activeJsonEvalId
 
   return (
     <div className="h-full min-h-0 overflow-auto p-3 pr-4">
-      <div className="mb-3 inline-flex items-center gap-1 rounded-lg border border-borderSubtle bg-[#10141c] p-1">
+      <div className="mb-3 inline-flex items-center gap-1 rounded-lg border border-borderSubtle bg-[#121722] p-1">
         {FILTERS.map((option) => (
           <button
             key={option.key}
@@ -148,7 +147,7 @@ export function EvalList({ evaluations, onOpenEval, onViewJson, activeJsonEvalId
             className={`rounded-md px-2 py-1 text-[11px] font-medium transition ${
               filter === option.key
                 ? "bg-[#1c2433] text-zinc-100"
-                : "text-zinc-400 hover:bg-[#171c26] hover:text-zinc-200"
+                : "text-zinc-400 hover:bg-[#171e2b] hover:text-zinc-200"
             }`}
           >
             {option.label}
@@ -189,7 +188,7 @@ export function EvalList({ evaluations, onOpenEval, onViewJson, activeJsonEvalId
                   Reasons
                 </th>
                 <th className="w-[90px] px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
-                  
+                  JSON
                 </th>
               </tr>
             </thead>
@@ -197,7 +196,8 @@ export function EvalList({ evaluations, onOpenEval, onViewJson, activeJsonEvalId
               {filteredEvaluations.map((evaluation, index) => (
                 <tr
                   key={evaluation.id}
-                  className={`border-b border-borderSubtle/70 text-[12px] text-zinc-300 transition hover:bg-[#171e2b] ${
+                  onClick={() => onOpenEval(evaluation.id)}
+                  className={`cursor-pointer border-b border-borderSubtle/70 text-[12px] text-zinc-300 transition hover:bg-[#171e2b] ${
                     activeJsonEvalId === evaluation.id ? "bg-[#182031]" : ""
                   }`}
                 >
@@ -247,25 +247,20 @@ export function EvalList({ evaluations, onOpenEval, onViewJson, activeJsonEvalId
                     {evaluation.reasonCodes.join(", ")}
                   </td>
                   <td className="px-3 py-2 text-right align-top">
-                    <div className="inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
-                      {onViewJson ? (
-                        <button
-                          type="button"
-                          onClick={() => onViewJson(evaluation.id)}
-                          className="inline-flex whitespace-nowrap rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
-                        >
-                          View JSON
-                        </button>
-                      ) : null}
+                    {onViewJson ? (
                       <button
                         type="button"
-                        onClick={() => onOpenEval(evaluation.id)}
-                        className="inline-flex items-center rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onViewJson(evaluation.id);
+                        }}
+                        className="inline-flex whitespace-nowrap rounded-full border border-[#343b48] bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-[#4d5a74] hover:text-zinc-100"
                       >
-                        View
-                        <GoIcon className="ml-1 h-3.5 w-3.5" />
+                        View JSON
                       </button>
-                    </div>
+                    ) : (
+                      <span className="text-zinc-500">-</span>
+                    )}
                   </td>
                 </tr>
               ))}

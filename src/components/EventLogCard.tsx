@@ -12,10 +12,10 @@ export function EventLogCard({ event, selected, onSelect }: EventLogCardProps) {
     <button
       type="button"
       onClick={() => onSelect(event.id)}
-      className={`w-full rounded-card border px-3 py-3 text-left shadow-soft transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 ${
+      className={`w-full rounded-card border px-3 py-3 text-left shadow-soft transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/70 ${
         selected
-          ? "border-blue-500/60 bg-[#171c26]"
-          : "border-borderSubtle bg-panelMuted hover:border-zinc-600 hover:bg-[#151922]"
+          ? "border-[#60a5fa]/60 bg-[#182031]"
+          : "border-borderSubtle bg-panelMuted hover:border-[#3b465d] hover:bg-[#171e2b]"
       }`}
     >
       <p className="text-[12px] font-semibold uppercase tracking-[0.045em] text-zinc-100">{formatTopLine(event)}</p>

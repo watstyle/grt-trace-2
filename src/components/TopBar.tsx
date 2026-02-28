@@ -9,16 +9,17 @@ type TopBarProps = {
   inlineAction?: ReactNode;
   rightContent?: ReactNode;
   showBackButton?: boolean;
+  sticky?: boolean;
 };
 
-export function TopBar({ title, subtitle, inlineAction, rightContent, showBackButton = true }: TopBarProps) {
+export function TopBar({ title, subtitle, inlineAction, rightContent, showBackButton = true, sticky = false }: TopBarProps) {
   const { canGoBack, goBack } = useNavigationStack();
   const { isOpen, onTriggerEnter, onTriggerLeave, onBackArrowEnter } = useSidebar();
 
   return (
     <header
-      className={`relative h-14 shrink-0 border-b border-borderSubtle backdrop-blur-sm ${
-        isOpen ? "bg-[#06080d]" : "bg-[#0b0d11]/95"
+      className={`${sticky ? "sticky top-0 z-50" : "relative"} h-14 shrink-0 border-b border-borderSubtle backdrop-blur-sm ${
+        isOpen ? "bg-[#08090c]" : "bg-[#0b0d11]/95"
       }`}
     >
       {isOpen ? <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black/35" /> : null}

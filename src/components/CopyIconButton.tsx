@@ -25,7 +25,7 @@ export function CopyIconButton({ value, label, className = "" }: CopyIconButtonP
       onClick={handleCopy}
       aria-label={`Copy ${label}`}
       title={`Copy ${label}`}
-      className={`inline-grid h-5 w-5 place-items-center rounded text-zinc-500 transition hover:bg-white/[0.05] hover:text-zinc-300 ${className}`}
+      className={`inline-grid h-5 w-5 place-items-center rounded text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-300 ${className}`}
     >
       <CopyIcon className="h-3.5 w-3.5" />
     </button>

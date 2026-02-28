@@ -1,4 +1,4 @@
-import { EntityType, ThreadEvent, getAllEventsForThread } from "./threadViewData";
+import { EntityType, EventLifecycle, ThreadEvent, getAllEventsForThread, threadViewDataById } from "./threadViewData";
 
 export type EvalStatus = "PASS" | "FAIL" | "UNKNOWN" | "MAPPED" | "MATCHED";
 
@@ -30,15 +30,68 @@ export type EntityRecord = {
   eventSnapshots: Record<string, EventSnapshot>;
 };
 
-const threadEventMap = new Map<string, ThreadEvent>(
-  getAllEventsForThread("t_1").map((event) => [event.id, event]),
-);
+type ThreadFlow = {
+  threadId: string;
+  loadId: string;
+  quoteId: string;
+  chargeId: string;
+  events: ThreadEvent[];
+  originCode: string;
+  destinationCode: string;
+  originCity: string;
+  originState: string;
+  destinationCity: string;
+  destinationState: string;
+};
 
-function pickEvents(eventIds: string[]): ThreadEvent[] {
-  return eventIds
-    .map((id) => threadEventMap.get(id))
-    .filter((event): event is ThreadEvent => Boolean(event))
-    .sort((a, b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime());
+const CITY_STATE_BY_CODE: Record<string, { city: string; state: string }> = {
+  DAL: { city: "Dallas", state: "TX" },
+  PHX: { city: "Phoenix", state: "AZ" },
+  ATL: { city: "Atlanta", state: "GA" },
+  MIA: { city: "Miami", state: "FL" },
+  SEA: { city: "Seattle", state: "WA" },
+  SLC: { city: "Salt Lake City", state: "UT" },
+  DEN: { city: "Denver", state: "CO" },
+  LAS: { city: "Las Vegas", state: "NV" },
+  CHI: { city: "Chicago", state: "IL" },
+  BOS: { city: "Boston", state: "MA" },
+  NASH: { city: "Nashville", state: "TN" },
+  CLT: { city: "Charlotte", state: "NC" },
+  LAX: { city: "Los Angeles", state: "CA" },
+  PDX: { city: "Portland", state: "OR" },
+  HOU: { city: "Houston", state: "TX" },
+  OKC: { city: "Oklahoma City", state: "OK" },
+  MSP: { city: "Minneapolis", state: "MN" },
+  KCMO: { city: "Kansas City", state: "MO" },
+  RNO: { city: "Reno", state: "NV" },
+  SAC: { city: "Sacramento", state: "CA" },
+};
+
+function money(value: number): string {
+  return value.toFixed(2);
+}
+
+function toNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function eventState(lifecycle: EventLifecycle): string {
+  if (lifecycle === "REQUEST") {
+    return "requested";
+  }
+  if (lifecycle === "OFFER") {
+    return "offered";
+  }
+  if (lifecycle === "CONFIRM") {
+    return "confirmed";
+  }
+  if (lifecycle === "WITHDRAW") {
+    return "withdrawn";
+  }
+  if (lifecycle === "REJECT") {
+    return "rejected";
+  }
+  return "cancelled";
 }
 
 function evalRecord(
@@ -65,757 +118,476 @@ function evalRecord(
   };
 }
 
-const baseLoadEvals: EvalRecord[] = [
-  evalRecord(
-    "eval_ld_1",
-    "fuel_surcharge",
-    "MAP-1",
-    "Charge code FSC mapped to standard fuel_surcharge",
-    "Mapped charge c_10 -> fuel_surcharge",
-    "0",
-    "PASS",
-    ["CHARGE_CODE_MAPPED"],
-    {
-      mapper: "charge-code-v3",
-      sourceCode: "FSC",
-      mappedCode: "fuel_surcharge",
-      confidence: 0.98,
-    },
-  ),
-  evalRecord(
-    "eval_ld_2",
-    "linehaul_total",
-    "MATCH-1",
-    "2060.00",
-    "2088.00",
-    "+28.00",
-    "FAIL",
-    ["MATCHED_CHARGES", "AMOUNT_OVERBILL"],
-    {
-      components: {
-        linehaul: 1850,
-        fuelSurcharge: 238,
-      },
-      expectedTotal: 2060,
-      observedTotal: 2088,
-      tolerance: 0,
-    },
-  ),
-  evalRecord(
-    "eval_ld_3",
-    "lumper_policy",
-    "RULE-7",
-    "No pre-bill lumper allowed",
-    "Rejected pre-bill in ev_107",
-    "0",
-    "PASS",
-    ["POLICY_COMPLIANT"],
-    {
-      rule: "receipt_required_before_reimbursement",
-      evidenceEventId: "ev_107",
-      outcome: "compliant",
-    },
-  ),
-  evalRecord(
-    "eval_ld_4",
-    "appointment_alignment",
-    "LINE-2",
-    "Pickup between 09:00-11:00 local",
-    "Pickup fixed at 10:00 local",
-    "0",
-    "PASS",
-    ["WINDOW_CONSTRAINED"],
-    {
-      requestedWindowLocal: ["09:00", "11:00"],
-      selectedPickupLocal: "10:00",
-      timezone: "America/Chicago",
-    },
-  ),
-  evalRecord(
-    "eval_ld_5",
-    "withdrawn_charge_cleanup",
-    "TOTAL-1",
-    "Withdrawn charge c_09 excluded",
-    "c_09 removed, c_10 active",
-    "0",
-    "PASS",
-    ["WITHDRAW_HANDLED"],
-    {
-      withdrawnChargeId: "c_09",
-      replacementChargeId: "c_10",
-      activeCharges: ["c_10"],
-    },
-  ),
-  evalRecord(
-    "eval_ld_6",
-    "carrier_docs_complete",
-    "RULE-7",
-    "Carrier submitted POD + lumper receipt",
-    "POD present, lumper receipt pending",
-    "N/A",
-    "UNKNOWN",
-    ["AWAITING_RECEIPT"],
-    {
-      requiredDocs: ["pod", "lumper_receipt"],
-      receivedDocs: ["pod"],
-      pendingDocs: ["lumper_receipt"],
-    },
-  ),
-];
+function byObservedAtAscending(events: ThreadEvent[]): ThreadEvent[] {
+  return [...events].sort((a, b) => new Date(a.observedAt).getTime() - new Date(b.observedAt).getTime());
+}
 
-const loadBaseMetadata = {
-  lane: [
-    {
-      stop: "pickup",
-      location: "Dallas, TX",
-      window: {
-        start: "2026-02-20T09:00:00-06:00",
-        end: "2026-02-20T11:00:00-06:00",
-      },
-    },
-    {
-      stop: "delivery",
-      location: "Phoenix, AZ",
-      window: {
-        start: "2026-02-21T09:00:00-07:00",
-        end: "2026-02-21T12:00:00-07:00",
-      },
-    },
-  ],
-  proof_text:
-    "Shipper requested LD-8219 with 53ft dry van and same-day quote confirmation. Billing requires explicit rejection of pre-billed lumper.",
-  constraints: [
-    "equipment=53ft_dry_van",
-    "detention_policy=carrier_terms_v2",
-    "lumper=receipt_required",
-    "pricing_currency=USD",
-  ],
-  references: {
-    threadId: "t_1",
-    primaryQuoteId: "q_31",
-    activeChargeIds: ["c_10"],
-  },
-};
+function eventProof(event: ThreadEvent): string {
+  if (typeof event.payload.proofText === "string" && event.payload.proofText.trim().length > 0) {
+    return event.payload.proofText;
+  }
+  return `${event.entityType.toUpperCase()} ${event.lifecycle} event observed in ${event.messageRef.messageId}.`;
+}
 
-const loadBaseState = {
-  loadId: "ld_8219",
-  status: "confirmed",
-  lane: {
-    origin: "DAL",
-    destination: "PHX",
-  },
-  appointment: {
-    pickupAt: "2026-02-20T16:00:00Z",
-    timezone: "America/Chicago",
-  },
-  selectedQuoteId: "q_31",
-  chargeIds: ["c_10"],
-  policy: {
-    lumper: "receipt_required",
-    fuelSurchargeMode: "index_linked",
-  },
-  updatedAt: "2026-02-17T12:08:22Z",
-};
+function getLifecycleStatus(event: ThreadEvent | undefined): string {
+  if (!event) {
+    return "unknown";
+  }
+  return eventState(event.lifecycle);
+}
 
-export const entityViewDataByKey: Record<string, EntityRecord> = {
-  "load:ld_8219": {
+function mapLaneCodes(loadEvent: ThreadEvent): {
+  originCode: string;
+  destinationCode: string;
+  originCity: string;
+  originState: string;
+  destinationCity: string;
+  destinationState: string;
+} {
+  const lane = (loadEvent.payload.lane ?? {}) as { origin?: unknown; destination?: unknown };
+  const originCode = typeof lane.origin === "string" ? lane.origin : "UNK";
+  const destinationCode = typeof lane.destination === "string" ? lane.destination : "UNK";
+
+  const origin = CITY_STATE_BY_CODE[originCode] ?? { city: originCode, state: "NA" };
+  const destination = CITY_STATE_BY_CODE[destinationCode] ?? { city: destinationCode, state: "NA" };
+
+  return {
+    originCode,
+    destinationCode,
+    originCity: origin.city,
+    originState: origin.state,
+    destinationCity: destination.city,
+    destinationState: destination.state,
+  };
+}
+
+const threadFlows: ThreadFlow[] = Object.values(threadViewDataById)
+  .map((thread) => {
+    const events = byObservedAtAscending(getAllEventsForThread(thread.id));
+    const loadEvent = events.find((event) => event.entityType === "load");
+    const quoteEvent = events.find((event) => event.entityType === "quote");
+    const chargeEvent = events.find((event) => event.entityType === "charge");
+
+    if (!loadEvent || !quoteEvent || !chargeEvent) {
+      return undefined;
+    }
+
+    const lane = mapLaneCodes(loadEvent);
+
+    return {
+      threadId: thread.id,
+      loadId: loadEvent.entityId,
+      quoteId: quoteEvent.entityId,
+      chargeId: chargeEvent.entityId,
+      events,
+      ...lane,
+    } satisfies ThreadFlow;
+  })
+  .filter((flow): flow is ThreadFlow => Boolean(flow));
+
+function getLoadRecord(flow: ThreadFlow, flowIndex: number): EntityRecord {
+  const latestLoadEvent = [...flow.events].reverse().find((event) => event.entityType === "load");
+  const latestQuoteEvent = [...flow.events].reverse().find((event) => event.entityType === "quote" && event.entityId === flow.quoteId);
+  const latestChargeEvent = [...flow.events].reverse().find((event) => event.entityType === "charge" && event.entityId === flow.chargeId);
+
+  const quoteOfferEvent = flow.events.find((event) => event.entityType === "quote" && event.entityId === flow.quoteId);
+  const chargeOfferEvent = flow.events.find((event) => event.entityType === "charge" && event.entityId === flow.chargeId);
+
+  const linehaul = toNumber(quoteOfferEvent?.payload.linehaul, 1700 + flowIndex * 65);
+  const fuel = toNumber(chargeOfferEvent?.payload.amount, 200 + flowIndex * 12);
+  const expectedTotal = linehaul + fuel;
+
+  const failMatch = flowIndex % 2 === 1;
+  const unknownDocs = flowIndex % 4 === 0;
+  const observedTotal = failMatch ? expectedTotal + 75 : expectedTotal;
+  const delta = observedTotal - expectedTotal;
+
+  const metadata = {
+    lane: [
+      {
+        stop: "pickup",
+        location: `${flow.originCity}, ${flow.originState}`,
+        code: flow.originCode,
+      },
+      {
+        stop: "delivery",
+        location: `${flow.destinationCity}, ${flow.destinationState}`,
+        code: flow.destinationCode,
+      },
+    ],
+    proof_text: eventProof(flow.events[0]),
+    constraints: [
+      "currency=USD",
+      "proof_source=email",
+      "lifecycle_tracking=enabled",
+      `thread=${flow.threadId}`,
+    ],
+    references: {
+      threadId: flow.threadId,
+      quoteId: flow.quoteId,
+      chargeId: flow.chargeId,
+    },
+  };
+
+  const canonicalState = {
+    loadId: flow.loadId,
+    status: getLifecycleStatus(latestLoadEvent),
+    lane: {
+      origin: flow.originCode,
+      destination: flow.destinationCode,
+    },
+    selectedQuoteId: flow.quoteId,
+    chargeIds: [flow.chargeId],
+    totalAmount: observedTotal,
+    updatedAt: latestLoadEvent?.observedAt ?? flow.events[flow.events.length - 1]?.observedAt,
+  };
+
+  const evals: EvalRecord[] = [
+    evalRecord(
+      `eval_${flow.loadId}_map`,
+      "fuel",
+      "MAP-1",
+      money(fuel),
+      money(fuel),
+      money(0),
+      "MAPPED",
+      ["CHARGE_CODE_MAPPED"],
+      {
+        sourceEventId: chargeOfferEvent?.id,
+        evidenceEventIds: [chargeOfferEvent?.id].filter(Boolean),
+      },
+    ),
+    evalRecord(
+      `eval_${flow.loadId}_match`,
+      "linehaul",
+      "MATCH-1",
+      money(expectedTotal),
+      money(observedTotal),
+      delta > 0 ? `+${money(delta)}` : money(delta),
+      failMatch ? "FAIL" : "MATCHED",
+      failMatch ? ["AMOUNT_OVERBILL"] : ["MATCHED_CHARGES"],
+      {
+        sourceEventId: latestLoadEvent?.id,
+        evidenceEventIds: [quoteOfferEvent?.id, latestLoadEvent?.id].filter(Boolean),
+      },
+    ),
+    evalRecord(
+      `eval_${flow.loadId}_docs`,
+      "pod_receipt",
+      "RULE-7",
+      money(1),
+      money(unknownDocs ? 0 : 1),
+      unknownDocs ? "N/A" : money(0),
+      unknownDocs ? "UNKNOWN" : "PASS",
+      unknownDocs ? ["AWAITING_RECEIPT"] : ["DOCS_COMPLETE"],
+      {
+        sourceEventId: latestQuoteEvent?.id ?? latestLoadEvent?.id,
+        evidenceEventIds: [latestQuoteEvent?.id ?? latestLoadEvent?.id].filter(Boolean),
+      },
+    ),
+  ];
+
+  const eventSnapshots: Record<string, EventSnapshot> = {};
+  for (const event of flow.events) {
+    const snapshotFail = event.lifecycle === "REJECT" || event.lifecycle === "WITHDRAW" || event.lifecycle === "CANCEL";
+
+    eventSnapshots[event.id] = {
+      metadata: {
+        ...metadata,
+        proof_text: eventProof(event),
+        selectedEventId: event.id,
+      },
+      canonicalState: {
+        ...canonicalState,
+        status: eventState(event.lifecycle),
+        lastEventId: event.id,
+        updatedAt: event.observedAt,
+      },
+      evals: [
+        evalRecord(
+          `eval_${flow.loadId}_${event.id}_snap`,
+          event.entityType === "quote" ? "quote_total" : event.entityType === "charge" ? "charge_code" : "load_lifecycle",
+          event.entityType === "charge" ? "MAP-1" : event.entityType === "quote" ? "MATCH-1" : "RULE-7",
+          money(100),
+          money(snapshotFail ? 125 : 100),
+          snapshotFail ? "+25.00" : "0.00",
+          snapshotFail ? "FAIL" : "PASS",
+          snapshotFail ? ["STATE_MISMATCH"] : ["STATE_ALIGNED"],
+          {
+            sourceEventId: event.id,
+            evidenceEventIds: [event.id],
+          },
+        ),
+      ],
+    };
+  }
+
+  return {
     entityType: "load",
-    entityId: "ld_8219",
-    metadata: loadBaseMetadata,
-    canonicalState: loadBaseState,
-    eventLog: pickEvents(["ev_101", "ev_102", "ev_103", "ev_104", "ev_105", "ev_106", "ev_107", "ev_108"]),
-    evals: baseLoadEvals,
-    eventSnapshots: {
-      ev_101: {
-        metadata: {
-          ...loadBaseMetadata,
-          proof_text: "Initial shipper request captured. No quote selected yet.",
-          references: {
-            threadId: "t_1",
-            primaryQuoteId: null,
-            activeChargeIds: [],
-          },
-        },
-        canonicalState: {
-          ...loadBaseState,
-          status: "requested",
-          selectedQuoteId: null,
-          chargeIds: [],
-          updatedAt: "2026-02-17T09:04:14Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_ld_101_1",
-            "request_parse",
-            "MAP-1",
-            "Parse lane + equipment",
-            "Lane/equipment parsed",
-            "0",
-            "PASS",
-            ["REQUEST_PARSED"],
-            {
-              sourceEventId: "ev_101",
-              parsedFields: ["lane", "pickupWindow", "equipment"],
-            },
-          ),
-        ],
+    entityId: flow.loadId,
+    metadata,
+    canonicalState,
+    eventLog: flow.events,
+    evals,
+    eventSnapshots,
+  };
+}
+
+function getQuoteRecord(flow: ThreadFlow, flowIndex: number): EntityRecord {
+  const quoteEvents = byObservedAtAscending(
+    flow.events.filter((event) => event.entityType === "quote" && event.entityId === flow.quoteId),
+  );
+
+  const latestQuoteEvent = quoteEvents[quoteEvents.length - 1];
+  const offeredQuoteEvent = quoteEvents.find((event) => event.lifecycle === "OFFER") ?? quoteEvents[0];
+  const linehaul = toNumber(offeredQuoteEvent?.payload.linehaul, 1600 + flowIndex * 70);
+  const fuel = toNumber(offeredQuoteEvent?.payload.fuelSurcharge, 180 + flowIndex * 10);
+  const total = toNumber(offeredQuoteEvent?.payload.total, linehaul + fuel);
+
+  const finalIsNegative =
+    latestQuoteEvent?.lifecycle === "REJECT" || latestQuoteEvent?.lifecycle === "WITHDRAW" || latestQuoteEvent?.lifecycle === "CANCEL";
+
+  const metadata = {
+    lane: [
+      {
+        stop: "pickup",
+        location: `${flow.originCity}, ${flow.originState}`,
+        code: flow.originCode,
       },
-      ev_102: {
-        metadata: {
-          ...loadBaseMetadata,
-          proof_text: "Quote q_31 offered with initial fuel estimate 210.",
-          references: {
-            threadId: "t_1",
-            primaryQuoteId: "q_31",
-            activeChargeIds: ["c_09"],
-          },
-        },
-        canonicalState: {
-          ...loadBaseState,
-          status: "offered",
-          selectedQuoteId: "q_31",
-          chargeIds: ["c_09"],
-          updatedAt: "2026-02-17T09:36:26Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_ld_102_1",
-            "offer_total",
-            "MATCH-1",
-            "2060.00",
-            "2060.00",
-            "0",
-            "PASS",
-            ["MATCHED_CHARGES"],
-            {
-              sourceEventId: "ev_102",
-              expected: 2060,
-              observed: 2060,
-            },
-          ),
-        ],
+      {
+        stop: "delivery",
+        location: `${flow.destinationCity}, ${flow.destinationState}`,
+        code: flow.destinationCode,
       },
-      ev_103: {
-        metadata: {
-          ...loadBaseMetadata,
-          proof_text: "Charge c_09 attached as fuel surcharge line item.",
-          references: {
-            threadId: "t_1",
-            primaryQuoteId: "q_31",
-            activeChargeIds: ["c_09"],
-          },
-        },
-        canonicalState: {
-          ...loadBaseState,
-          status: "offered",
-          selectedQuoteId: "q_31",
-          chargeIds: ["c_09"],
-          updatedAt: "2026-02-17T09:36:26Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_ld_103_1",
-            "charge_link",
-            "LINE-2",
-            "Charge links to load",
-            "c_09 linked",
-            "0",
-            "PASS",
-            ["LINKED_TO_LOAD"],
-            {
-              sourceEventId: "ev_103",
-              chargeId: "c_09",
-              loadId: "ld_8219",
-            },
-          ),
-        ],
-      },
-      ev_104: {
-        metadata: {
-          ...loadBaseMetadata,
-          proof_text: "Shipper confirmed appointment and selected q_31.",
-          references: {
-            threadId: "t_1",
-            primaryQuoteId: "q_31",
-            activeChargeIds: ["c_09"],
-          },
-        },
-        canonicalState: {
-          ...loadBaseState,
-          status: "confirmed",
-          selectedQuoteId: "q_31",
-          chargeIds: ["c_09"],
-          updatedAt: "2026-02-17T10:12:42Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_ld_104_1",
-            "confirmation",
-            "RULE-7",
-            "Explicit confirmation required",
-            "Confirmed in ev_104",
-            "0",
-            "PASS",
-            ["EXPLICIT_CONFIRMATION"],
-            {
-              sourceEventId: "ev_104",
-              confirmer: "SHIPPER",
-            },
-          ),
-        ],
-      },
-      ev_105: {
-        metadata: {
-          ...loadBaseMetadata,
-          proof_text: "Charge c_09 withdrawn due to index recalc.",
-          references: {
-            threadId: "t_1",
-            primaryQuoteId: "q_31",
-            activeChargeIds: [],
-          },
-        },
-        canonicalState: {
-          ...loadBaseState,
-          status: "re-rating",
-          selectedQuoteId: "q_31",
-          chargeIds: [],
-          updatedAt: "2026-02-17T10:41:17Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_ld_105_1",
-            "withdraw_cleanup",
-            "TOTAL-1",
-            "Withdrawn charge removed",
-            "c_09 removed",
-            "0",
-            "PASS",
-            ["WITHDRAW_HANDLED"],
-            {
-              sourceEventId: "ev_105",
-              removedChargeId: "c_09",
-            },
-          ),
-        ],
-      },
-      ev_106: {
-        metadata: {
-          ...loadBaseMetadata,
-          proof_text: "Replacement charge c_10 added at 238.",
-          references: {
-            threadId: "t_1",
-            primaryQuoteId: "q_31",
-            activeChargeIds: ["c_10"],
-          },
-        },
-        canonicalState: {
-          ...loadBaseState,
-          status: "rated",
-          selectedQuoteId: "q_31",
-          chargeIds: ["c_10"],
-          updatedAt: "2026-02-17T10:41:23Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_ld_106_1",
-            "linehaul_total",
-            "MATCH-1",
-            "2060.00",
-            "2088.00",
-            "+28.00",
-            "FAIL",
-            ["AMOUNT_OVERBILL"],
-            {
-              sourceEventId: "ev_106",
-              expected: 2060,
-              observed: 2088,
-              components: { linehaul: 1850, fuel: 238 },
-            },
-          ),
-        ],
-      },
-      ev_107: {
-        metadata: {
-          ...loadBaseMetadata,
-          proof_text: "Billing policy update rejects all lumper pre-bills.",
-          constraints: [...loadBaseMetadata.constraints, "lumper_prebill=reject"],
-        },
-        canonicalState: {
-          ...loadBaseState,
-          status: "policy-updated",
-          selectedQuoteId: "q_31",
-          chargeIds: ["c_10"],
-          updatedAt: "2026-02-17T11:05:14Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_ld_107_1",
-            "lumper_policy",
-            "RULE-7",
-            "No pre-bill lumper allowed",
-            "Rejected pre-bill in ev_107",
-            "0",
-            "PASS",
-            ["POLICY_COMPLIANT"],
-            {
-              sourceEventId: "ev_107",
-              outcome: "compliant",
-            },
-          ),
-        ],
-      },
-      ev_108: {
-        metadata: loadBaseMetadata,
-        canonicalState: loadBaseState,
-        evals: baseLoadEvals,
-      },
+    ],
+    proof_text: eventProof(latestQuoteEvent ?? offeredQuoteEvent),
+    constraints: ["currency=USD", "quote_scope=per_load", `parent_load=${flow.loadId}`],
+    references: {
+      parentLoadId: flow.loadId,
+      threadId: flow.threadId,
     },
-  },
-  "quote:q_31": {
+  };
+
+  const canonicalState = {
+    quoteId: flow.quoteId,
+    parentLoadId: flow.loadId,
+    status: getLifecycleStatus(latestQuoteEvent),
+    linehaul,
+    fuelSurcharge: fuel,
+    total,
+    selectedByEventId: latestQuoteEvent?.id,
+    updatedAt: latestQuoteEvent?.observedAt ?? offeredQuoteEvent?.observedAt,
+  };
+
+  const evals: EvalRecord[] = [
+    evalRecord(
+      `eval_${flow.quoteId}_total`,
+      "quote_total",
+      "MATCH-1",
+      money(total),
+      money(finalIsNegative ? total + 40 : total),
+      finalIsNegative ? "+40.00" : "0.00",
+      finalIsNegative ? "FAIL" : "MATCHED",
+      finalIsNegative ? ["QUOTE_DEVIATION"] : ["MATCHED_CHARGES"],
+      {
+        sourceEventId: latestQuoteEvent?.id,
+        evidenceEventIds: [offeredQuoteEvent?.id, latestQuoteEvent?.id].filter(Boolean),
+      },
+    ),
+    evalRecord(
+      `eval_${flow.quoteId}_state`,
+      "quote_lifecycle",
+      "RULE-7",
+      money(1),
+      money(finalIsNegative ? 0 : 1),
+      finalIsNegative ? "N/A" : "0.00",
+      finalIsNegative ? "UNKNOWN" : "PASS",
+      finalIsNegative ? ["FINAL_STATE_NEGATIVE"] : ["FINAL_STATE_VALID"],
+      {
+        sourceEventId: latestQuoteEvent?.id,
+        evidenceEventIds: [latestQuoteEvent?.id].filter(Boolean),
+      },
+    ),
+  ];
+
+  const eventSnapshots: Record<string, EventSnapshot> = {};
+  for (const event of quoteEvents) {
+    const negative = event.lifecycle === "REJECT" || event.lifecycle === "WITHDRAW" || event.lifecycle === "CANCEL";
+
+    eventSnapshots[event.id] = {
+      metadata: {
+        ...metadata,
+        proof_text: eventProof(event),
+        selectedEventId: event.id,
+      },
+      canonicalState: {
+        ...canonicalState,
+        status: eventState(event.lifecycle),
+        updatedAt: event.observedAt,
+      },
+      evals: [
+        evalRecord(
+          `eval_${flow.quoteId}_${event.id}_snap`,
+          "quote_snapshot",
+          "MATCH-1",
+          money(total),
+          money(negative ? total + 25 : total),
+          negative ? "+25.00" : "0.00",
+          negative ? "FAIL" : "PASS",
+          negative ? ["SNAPSHOT_VARIANCE"] : ["SNAPSHOT_ALIGNED"],
+          {
+            sourceEventId: event.id,
+            evidenceEventIds: [event.id],
+          },
+        ),
+      ],
+    };
+  }
+
+  return {
     entityType: "quote",
-    entityId: "q_31",
-    metadata: {
-      lane: [
-        { stop: "pickup", location: "Dallas, TX" },
-        { stop: "delivery", location: "Phoenix, AZ" },
-      ],
-      proof_text: "Carrier offered quote q_31 and shipper confirmed it as primary.",
-      constraints: ["currency=USD", "carrier_terms=detention_policy_v2"],
-    },
-    canonicalState: {
-      quoteId: "q_31",
-      status: "selected",
-      linehaul: 1850,
-      fuelSurcharge: 238,
-      total: 2088,
-      selectedByEventId: "ev_104",
-      lastUpdatedAt: "2026-02-17T12:08:22Z",
-    },
-    eventLog: pickEvents(["ev_102", "ev_104", "ev_108"]),
-    evals: [
-      evalRecord(
-        "eval_q_1",
-        "quote_total",
-        "MATCH-1",
-        "2060.00",
-        "2088.00",
-        "+28.00",
-        "FAIL",
-        ["AMOUNT_OVERBILL"],
-        {
-          quoteId: "q_31",
-          expected: 2060,
-          observed: 2088,
-        },
-      ),
-      evalRecord(
-        "eval_q_2",
-        "selection",
-        "RULE-7",
-        "must have explicit shipper confirmation",
-        "confirmed in ev_104",
-        "0",
-        "PASS",
-        ["EXPLICIT_CONFIRMATION"],
-        {
-          confirmationEventId: "ev_104",
-          confirmer: "SHIPPER",
-        },
-      ),
+    entityId: flow.quoteId,
+    metadata,
+    canonicalState,
+    eventLog: quoteEvents,
+    evals,
+    eventSnapshots,
+  };
+}
+
+function getChargeRecord(flow: ThreadFlow, flowIndex: number): EntityRecord {
+  const chargeEvents = byObservedAtAscending(
+    flow.events.filter((event) => event.entityType === "charge" && event.entityId === flow.chargeId),
+  );
+
+  const latestChargeEvent = chargeEvents[chargeEvents.length - 1];
+  const offeredChargeEvent = chargeEvents.find((event) => event.lifecycle === "OFFER") ?? chargeEvents[0];
+  const amount = toNumber(offeredChargeEvent?.payload.amount, 175 + flowIndex * 9);
+
+  const metadata = {
+    lane: [
+      {
+        stop: "pickup",
+        location: `${flow.originCity}, ${flow.originState}`,
+        code: flow.originCode,
+      },
+      {
+        stop: "delivery",
+        location: `${flow.destinationCity}, ${flow.destinationState}`,
+        code: flow.destinationCode,
+      },
     ],
-    eventSnapshots: {
-      ev_102: {
-        metadata: {
-          lane: [
-            { stop: "pickup", location: "Dallas, TX" },
-            { stop: "delivery", location: "Phoenix, AZ" },
-          ],
-          proof_text: "Initial quote submitted with fuel 210.",
-          constraints: ["currency=USD"],
-        },
-        canonicalState: {
-          quoteId: "q_31",
-          status: "offered",
-          linehaul: 1850,
-          fuelSurcharge: 210,
-          total: 2060,
-          lastUpdatedAt: "2026-02-17T09:36:18Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_q_102_1",
-            "quote_total",
-            "MATCH-1",
-            "2060.00",
-            "2060.00",
-            "0",
-            "PASS",
-            ["MATCHED_CHARGES"],
-            {
-              sourceEventId: "ev_102",
-            },
-          ),
-        ],
-      },
-      ev_104: {
-        metadata: {
-          lane: [
-            { stop: "pickup", location: "Dallas, TX" },
-            { stop: "delivery", location: "Phoenix, AZ" },
-          ],
-          proof_text: "Quote selected by shipper in confirmation email.",
-          constraints: ["currency=USD", "selected=true"],
-        },
-        canonicalState: {
-          quoteId: "q_31",
-          status: "selected",
-          linehaul: 1850,
-          fuelSurcharge: 210,
-          total: 2060,
-          selectedByEventId: "ev_104",
-          lastUpdatedAt: "2026-02-17T10:12:42Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_q_104_1",
-            "selection",
-            "RULE-7",
-            "must have explicit shipper confirmation",
-            "confirmed in ev_104",
-            "0",
-            "PASS",
-            ["EXPLICIT_CONFIRMATION"],
-            {
-              sourceEventId: "ev_104",
-            },
-          ),
-        ],
-      },
-      ev_108: {
-        metadata: {
-          lane: [
-            { stop: "pickup", location: "Dallas, TX" },
-            { stop: "delivery", location: "Phoenix, AZ" },
-          ],
-          proof_text: "Final bundle references updated fuel 238.",
-          constraints: ["currency=USD", "selected=true", "bundle=final"],
-        },
-        canonicalState: {
-          quoteId: "q_31",
-          status: "selected",
-          linehaul: 1850,
-          fuelSurcharge: 238,
-          total: 2088,
-          selectedByEventId: "ev_104",
-          lastUpdatedAt: "2026-02-17T12:08:22Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_q_108_1",
-            "quote_total",
-            "MATCH-1",
-            "2060.00",
-            "2088.00",
-            "+28.00",
-            "FAIL",
-            ["AMOUNT_OVERBILL"],
-            {
-              sourceEventId: "ev_108",
-            },
-          ),
-        ],
-      },
+    proof_text: eventProof(latestChargeEvent ?? offeredChargeEvent),
+    constraints: ["currency=USD", "charge_trace=enabled", `parent_load=${flow.loadId}`],
+    references: {
+      parentLoadId: flow.loadId,
+      threadId: flow.threadId,
     },
-  },
-  "charge:c_10": {
+  };
+
+  const canonicalState = {
+    chargeId: flow.chargeId,
+    parentLoadId: flow.loadId,
+    status: getLifecycleStatus(latestChargeEvent),
+    chargeType:
+      typeof offeredChargeEvent?.payload.chargeType === "string" ? offeredChargeEvent.payload.chargeType : "ACCESSORIAL",
+    amount,
+    updatedAt: latestChargeEvent?.observedAt ?? offeredChargeEvent?.observedAt,
+  };
+
+  const finalNegative =
+    latestChargeEvent?.lifecycle === "REJECT" || latestChargeEvent?.lifecycle === "WITHDRAW" || latestChargeEvent?.lifecycle === "CANCEL";
+
+  const evals: EvalRecord[] = [
+    evalRecord(
+      `eval_${flow.chargeId}_map`,
+      "charge_mapping",
+      "MAP-1",
+      money(amount),
+      money(amount),
+      "0.00",
+      "MAPPED",
+      ["CHARGE_CODE_MAPPED"],
+      {
+        sourceEventId: offeredChargeEvent?.id,
+        evidenceEventIds: [offeredChargeEvent?.id].filter(Boolean),
+      },
+    ),
+    evalRecord(
+      `eval_${flow.chargeId}_status`,
+      "charge_lifecycle",
+      "LINE-2",
+      money(1),
+      money(finalNegative ? 0 : 1),
+      finalNegative ? "N/A" : "0.00",
+      finalNegative ? "UNKNOWN" : "PASS",
+      finalNegative ? ["CHARGE_WITHDRAWN"] : ["CHARGE_CONFIRMED"],
+      {
+        sourceEventId: latestChargeEvent?.id,
+        evidenceEventIds: [latestChargeEvent?.id].filter(Boolean),
+      },
+    ),
+  ];
+
+  const eventSnapshots: Record<string, EventSnapshot> = {};
+  for (const event of chargeEvents) {
+    const negative = event.lifecycle === "REJECT" || event.lifecycle === "WITHDRAW" || event.lifecycle === "CANCEL";
+
+    eventSnapshots[event.id] = {
+      metadata: {
+        ...metadata,
+        proof_text: eventProof(event),
+        selectedEventId: event.id,
+      },
+      canonicalState: {
+        ...canonicalState,
+        status: eventState(event.lifecycle),
+        updatedAt: event.observedAt,
+      },
+      evals: [
+        evalRecord(
+          `eval_${flow.chargeId}_${event.id}_snap`,
+          "charge_snapshot",
+          "MAP-1",
+          money(amount),
+          money(negative ? 0 : amount),
+          negative ? `-${money(amount)}` : "0.00",
+          negative ? "FAIL" : "PASS",
+          negative ? ["CHARGE_REMOVED"] : ["CHARGE_ACTIVE"],
+          {
+            sourceEventId: event.id,
+            evidenceEventIds: [event.id],
+          },
+        ),
+      ],
+    };
+  }
+
+  return {
     entityType: "charge",
-    entityId: "c_10",
-    metadata: {
-      lane: [
-        { stop: "pickup", location: "Dallas, TX" },
-        { stop: "delivery", location: "Phoenix, AZ" },
-      ],
-      proof_text: "Charge c_10 replaced withdrawn fuel estimate c_09 and is currently active.",
-      constraints: ["charge_type=fuel_surcharge", "requires_source_model"],
-    },
-    canonicalState: {
-      chargeId: "c_10",
-      type: "fuel_surcharge",
-      amount: 238,
-      status: "active",
-      sourceModel: "rate-v4.2",
-      replacementFor: "c_09",
-      updatedAt: "2026-02-17T11:05:14Z",
-    },
-    eventLog: pickEvents(["ev_105", "ev_106", "ev_107", "ev_108"]),
-    evals: [
-      evalRecord(
-        "eval_c_1",
-        "charge_mapping",
-        "MAP-1",
-        "fuel_surcharge",
-        "fuel_surcharge",
-        "0",
-        "PASS",
-        ["CHARGE_CODE_MAPPED"],
-        {
-          chargeId: "c_10",
-          mappedTo: "fuel_surcharge",
-        },
-      ),
-      evalRecord(
-        "eval_c_2",
-        "charge_policy",
-        "LINE-2",
-        "No lumper pre-bill",
-        "lumper pre-bill rejected",
-        "0",
-        "PASS",
-        ["MATCHED_CHARGES"],
-        {
-          policyEventId: "ev_107",
-          enforcement: "applied",
-        },
-      ),
-    ],
-    eventSnapshots: {
-      ev_105: {
-        metadata: {
-          lane: [
-            { stop: "pickup", location: "Dallas, TX" },
-            { stop: "delivery", location: "Phoenix, AZ" },
-          ],
-          proof_text: "Legacy charge c_09 withdrawn before c_10 creation.",
-          constraints: ["charge_type=fuel_surcharge"],
-        },
-        canonicalState: {
-          chargeId: "c_10",
-          status: "pending_create",
-          replacementFor: "c_09",
-          updatedAt: "2026-02-17T10:41:17Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_c_105_1",
-            "withdraw_transition",
-            "TOTAL-1",
-            "prepare replacement",
-            "replacement pending",
-            "0",
-            "PASS",
-            ["WITHDRAW_HANDLED"],
-            {
-              sourceEventId: "ev_105",
-            },
-          ),
-        ],
-      },
-      ev_106: {
-        metadata: {
-          lane: [
-            { stop: "pickup", location: "Dallas, TX" },
-            { stop: "delivery", location: "Phoenix, AZ" },
-          ],
-          proof_text: "Replacement charge c_10 created from model v4.2.",
-          constraints: ["charge_type=fuel_surcharge", "requires_source_model"],
-        },
-        canonicalState: {
-          chargeId: "c_10",
-          type: "fuel_surcharge",
-          amount: 238,
-          status: "active",
-          sourceModel: "rate-v4.2",
-          replacementFor: "c_09",
-          updatedAt: "2026-02-17T10:41:23Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_c_106_1",
-            "charge_mapping",
-            "MAP-1",
-            "fuel_surcharge",
-            "fuel_surcharge",
-            "0",
-            "PASS",
-            ["CHARGE_CODE_MAPPED"],
-            {
-              sourceEventId: "ev_106",
-            },
-          ),
-        ],
-      },
-      ev_107: {
-        metadata: {
-          lane: [
-            { stop: "pickup", location: "Dallas, TX" },
-            { stop: "delivery", location: "Phoenix, AZ" },
-          ],
-          proof_text: "Policy enforcement event confirms lumper pre-bill rejection.",
-          constraints: ["charge_type=fuel_surcharge", "lumper_prebill=reject"],
-        },
-        canonicalState: {
-          chargeId: "c_10",
-          type: "fuel_surcharge",
-          amount: 238,
-          status: "active",
-          sourceModel: "rate-v4.2",
-          replacementFor: "c_09",
-          policyAppliedAt: "2026-02-17T11:05:14Z",
-          updatedAt: "2026-02-17T11:05:14Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_c_107_1",
-            "charge_policy",
-            "LINE-2",
-            "No lumper pre-bill",
-            "lumper pre-bill rejected",
-            "0",
-            "PASS",
-            ["MATCHED_CHARGES"],
-            {
-              sourceEventId: "ev_107",
-            },
-          ),
-        ],
-      },
-      ev_108: {
-        metadata: {
-          lane: [
-            { stop: "pickup", location: "Dallas, TX" },
-            { stop: "delivery", location: "Phoenix, AZ" },
-          ],
-          proof_text: "Final bundle contains active charge c_10.",
-          constraints: ["charge_type=fuel_surcharge", "bundle=final"],
-        },
-        canonicalState: {
-          chargeId: "c_10",
-          type: "fuel_surcharge",
-          amount: 238,
-          status: "active",
-          sourceModel: "rate-v4.2",
-          replacementFor: "c_09",
-          updatedAt: "2026-02-17T12:08:22Z",
-        },
-        evals: [
-          evalRecord(
-            "eval_c_108_1",
-            "bundle_consistency",
-            "MATCH-1",
-            "charge exists in final bundle",
-            "present in ev_108",
-            "0",
-            "PASS",
-            ["MATCHED_CHARGES"],
-            {
-              sourceEventId: "ev_108",
-            },
-          ),
-        ],
-      },
-    },
+    entityId: flow.chargeId,
+    metadata,
+    canonicalState,
+    eventLog: chargeEvents,
+    evals,
+    eventSnapshots,
+  };
+}
+
+export const entityViewDataByKey: Record<string, EntityRecord> = threadFlows.reduce<Record<string, EntityRecord>>(
+  (acc, flow, index) => {
+    const loadRecord = getLoadRecord(flow, index);
+    const quoteRecord = getQuoteRecord(flow, index);
+    const chargeRecord = getChargeRecord(flow, index);
+
+    acc[`load:${flow.loadId}`] = loadRecord;
+    acc[`quote:${flow.quoteId}`] = quoteRecord;
+    acc[`charge:${flow.chargeId}`] = chargeRecord;
+
+    return acc;
   },
-};
+  {},
+);
 
 export function getEntityRecord(entityType: EntityType, entityId: string): EntityRecord | undefined {
   return entityViewDataByKey[`${entityType}:${entityId}`];

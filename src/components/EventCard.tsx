@@ -16,7 +16,7 @@ export function EventCard({ event, isExpanded, onToggle }: EventCardProps) {
         type="button"
         onClick={() => onToggle(event.id)}
         aria-label={isExpanded ? "Collapse event" : "Expand event"}
-        className="flex h-10 w-full items-center justify-between border-b border-borderSubtle px-3 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70"
+        className="flex h-10 w-full items-center justify-between border-b border-borderSubtle px-3 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/70"
       >
         <h3 className="truncate pr-2 text-[12px] font-semibold uppercase tracking-[0.045em] text-zinc-100">
           {formatTopLine(event)}
@@ -29,7 +29,7 @@ export function EventCard({ event, isExpanded, onToggle }: EventCardProps) {
       {isExpanded ? (
         <>
           <div className="p-3">
-            <pre className="stable-scroll max-h-[320px] overflow-auto rounded-lg border border-borderSubtle bg-[#10141c] p-3 font-mono text-[12px] leading-5 text-zinc-200">
+            <pre className="stable-scroll max-h-[320px] overflow-auto rounded-lg border border-borderSubtle bg-[#121722] p-3 font-mono text-[12px] leading-5 text-zinc-200">
               {JSON.stringify(event, null, 2)}
             </pre>
           </div>
@@ -39,7 +39,7 @@ export function EventCard({ event, isExpanded, onToggle }: EventCardProps) {
               <CopyIconButton value={event.id} label="Event ID" />
             </p>
             <Link
-              className="inline-flex items-center rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+              className="inline-flex items-center rounded-full border border-[#343b48] bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-[#4d5a74] hover:text-zinc-100"
               to={`/entity/${event.entityType}/${event.entityId}?eventId=${event.id}&view=event-log`}
             >
               View Entity
@@ -54,7 +54,7 @@ export function EventCard({ event, isExpanded, onToggle }: EventCardProps) {
             <CopyIconButton value={event.id} label="Event ID" />
           </p>
           <Link
-            className="inline-flex items-center rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+            className="inline-flex items-center rounded-full border border-[#343b48] bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-[#4d5a74] hover:text-zinc-100"
             to={`/entity/${event.entityType}/${event.entityId}?eventId=${event.id}&view=event-log`}
           >
             View Entity

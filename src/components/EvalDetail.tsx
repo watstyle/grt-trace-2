@@ -16,7 +16,7 @@ export function EvalDetail({ evaluation, onClose }: EvalDetailProps) {
           type="button"
           aria-label="Close eval detail"
           onClick={onClose}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#343b48] text-zinc-300 transition hover:border-[#4d5a74] hover:bg-[#171e2b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/70"
         >
           ×
         </button>

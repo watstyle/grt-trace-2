@@ -1,5 +1,5 @@
 import { EvalRecord, entityViewDataByKey } from "./entityViewData";
-import { evalsById } from "./evalViewData";
+import { evalsById, getLoadIdForEval } from "./evalViewData";
 import { EventLifecycle, EntityType, threadViewDataById } from "./threadViewData";
 
 export type LifecycleFilter = "ALL" | "CONFIRMED" | "OFFERED" | "REQUESTED" | "REJECTED";
@@ -33,12 +33,35 @@ export type SidebarEvalRow = {
 
 export type SidebarExceptionRow = {
   id: string;
-  title: string;
-  status: "OPEN" | "TRIAGED";
+  exceptionType: string;
+  loadId: string;
+  account: string;
+  deliveredOn: string;
+  lastUpdatedOn: string;
+  resolutionStatus: "Unresolved" | "Resolved";
+  reviewStatus: "Pending Review";
+  amount: number;
   entityType: EntityType;
   entityId: string;
   evalId: string;
 };
+
+function toDisplayDate(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    const parts = value.split("/");
+    if (parts.length === 3) {
+      return `${parts[0]}-${parts[1]}-${parts[2].slice(-2)}`;
+    }
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "2-digit",
+  }).format(parsed);
+}
 
 function normalizeLifecycle(lifecycle: EventLifecycle | undefined, fallbackState: string): Exclude<LifecycleFilter, "ALL"> {
   if (lifecycle === "CONFIRM") {
@@ -163,11 +186,33 @@ export const sidebarEvalRows: SidebarEvalRow[] = Array.from(evalMap.values()).so
 
 export const sidebarExceptionRows: SidebarExceptionRow[] = sidebarEvalRows
   .filter((row) => row.result === "FAIL" || row.result === "UNKNOWN")
-  .map((row, index) => ({
-    id: `ex_${index + 1}`,
-    title: row.title,
-    status: row.result === "FAIL" ? "OPEN" : "TRIAGED",
-    entityType: row.entityType,
-    entityId: row.entityId,
-    evalId: row.id,
-  }));
+  .map((row, index) => {
+    const evalView = evalsById[row.id];
+    const loadId = getLoadIdForEval(row.id) ?? row.entityId;
+    const sourceRecord = entityViewDataByKey[`${row.entityType}:${row.entityId}`];
+    const updatedAt =
+      ((sourceRecord?.canonicalState.updatedAt ??
+        sourceRecord?.canonicalState.lastUpdatedAt ??
+        sourceRecord?.eventLog[sourceRecord.eventLog.length - 1]?.observedAt ??
+        "2026-02-17T00:00:00Z") as string);
+
+    return {
+      id: `ex_${index + 1}`,
+      exceptionType: row.title,
+      loadId,
+      account: evalView?.orderDetails.accountName ?? "Customer Account",
+      deliveredOn: toDisplayDate(evalView?.orderDetails.deliveryDate ?? "02/24/2026"),
+      lastUpdatedOn: toDisplayDate(updatedAt),
+      resolutionStatus: row.result === "FAIL" ? "Unresolved" : "Resolved",
+      reviewStatus: "Pending Review",
+      amount: evalView?.varianceAmount ?? 0,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      evalId: row.id,
+    } satisfies SidebarExceptionRow;
+  })
+  .sort((a, b) => {
+    const aTime = new Date(a.lastUpdatedOn).getTime();
+    const bTime = new Date(b.lastUpdatedOn).getTime();
+    return bTime - aTime;
+  });

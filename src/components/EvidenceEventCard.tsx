@@ -14,10 +14,10 @@ export function EvidenceEventCard({ item, selected, onSelect, onOpenJson }: Evid
     <button
       type="button"
       onClick={() => onSelect(item.event.id)}
-      className={`w-full rounded-card border px-3 py-3 text-left shadow-soft transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70 ${
+      className={`w-full rounded-card border px-3 py-3 text-left shadow-soft transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/70 ${
         selected
-          ? "border-blue-500/60 bg-[#171c26]"
-          : "border-borderSubtle bg-panelMuted hover:border-zinc-600 hover:bg-[#151922]"
+          ? "border-[#60a5fa]/60 bg-[#182031]"
+          : "border-borderSubtle bg-panelMuted hover:border-[#3b465d] hover:bg-[#171e2b]"
       }`}
     >
       <div className="mb-2 flex items-start justify-between gap-2">
@@ -33,13 +33,13 @@ export function EvidenceEventCard({ item, selected, onSelect, onOpenJson }: Evid
             event.stopPropagation();
             onOpenJson(item.event.id);
           }}
-          className="shrink-0 rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+          className="shrink-0 rounded-full border border-[#343b48] bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-[#4d5a74] hover:text-zinc-100"
         >
           Event JSON
         </button>
       </div>
 
-      <blockquote className="mb-3 rounded-lg border-l-2 border-zinc-600 bg-white/[0.05] px-3 py-2 text-[12px] leading-5 text-zinc-200">
+      <blockquote className="mb-3 rounded-lg border-l-2 border-[#4d5a74] bg-white/[0.05] px-3 py-2 text-[12px] leading-5 text-zinc-200">
         "{item.proofText}"
       </blockquote>
 

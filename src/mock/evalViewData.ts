@@ -4,6 +4,7 @@ import {
   EventLifecycle,
   ThreadEvent,
   ThreadMessage,
+  getAllEvents,
   getAllEventsForThread,
   getMessageById,
 } from "./threadViewData";
@@ -57,60 +58,43 @@ const lifecycleLabelMap: Record<EventLifecycle, string> = {
   REJECT: "Rejected",
 };
 
-const proofTextByEventId: Record<string, string> = {
-  ev_101: "Please create load LD-8219 for lane DAL -> PHX.",
-  ev_102: "We can offer primary linehaul at 1850 USD and include fuel surcharge estimate.",
-  ev_103: "Please confirm if accessorials should be split by line item.",
-  ev_104: "Please set requested pickup appointment for 10:00 local and lock quote q_31 as primary.",
-  ev_105: "Original accessorial estimate withdrawn.",
-  ev_106: "Replacing with revised fuel amount and adding lumper reserve pending POD.",
-  ev_107: "Please reject any lumper pre-bill.",
-  ev_108: "Quote q_31 is active and charge c_10 is linked as fuel line item.",
-};
+const REAL_EXCEPTION_TITLES = [
+  "Missing Stopoff Charge",
+  "Layover Charge Mismatch",
+  "All-in Mismatch",
+  "Missing Linehaul",
+] as const;
 
-const baseOrderDetails: EvalOrderDetails = {
-  orderId: "4GH7618",
-  custShipId: "SH998271",
-  accountName: "Customer ABC Industries",
-  billToCode: "FG678",
-  origin: { city: "Dallas", state: "TX", code: "GH813" },
-  destination: { city: "Houston", state: "TX", code: "JK814" },
-  tenderDate: "01/26/2026",
-  pickupDate: "01/28/2026",
-  deliveryDate: "01/29/2026",
-};
+function stableTitleFromId(evalId: string): (typeof REAL_EXCEPTION_TITLES)[number] {
+  let hash = 0;
+  for (let i = 0; i < evalId.length; i += 1) {
+    hash = (hash * 31 + evalId.charCodeAt(i)) >>> 0;
+  }
+  return REAL_EXCEPTION_TITLES[hash % REAL_EXCEPTION_TITLES.length];
+}
 
-const allThreadEvents = getAllEventsForThread("t_1");
+function getExceptionTitle(evalRecord: EvalRecord): string {
+  const key = `${evalRecord.lineItem} ${evalRecord.checkType} ${evalRecord.reasonCodes.join(" ")}`.toLowerCase();
 
-export const eventsById: Record<string, ThreadEvent> = allThreadEvents.reduce<Record<string, ThreadEvent>>(
-  (acc, event) => {
-    acc[event.id] = event;
-    return acc;
-  },
-  {},
-);
+  if (key.includes("stopoff")) {
+    return "Missing Stopoff Charge";
+  }
+  if (key.includes("layover")) {
+    return "Layover Charge Mismatch";
+  }
+  if (key.includes("linehaul")) {
+    return "Missing Linehaul";
+  }
+  if (
+    key.includes("total") ||
+    key.includes("all-in") ||
+    key.includes("all in") ||
+    key.includes("quote_total")
+  ) {
+    return "All-in Mismatch";
+  }
 
-export const evalsById: Record<string, EvalViewRecord> = {
-  eval_ld_2: {
-    id: "eval_ld_2",
-    title: "Layover Charge Variance",
-    varianceAmount: -750,
-    currency: "USD",
-    entityType: "load",
-    entityId: "ld_8219",
-    orderDetails: baseOrderDetails,
-    exception: { title: "Layover Charge Variance" },
-    lineItems: [{ chargeCode: "LAYOVER", billed: 0, expected: 750, variance: -750 }],
-    evidenceEventIds: ["ev_101", "ev_104", "ev_106", "ev_107", "ev_108"],
-  },
-};
-
-function toTitle(value: string): string {
-  return value
-    .split(/[_\s-]+/g)
-    .filter(Boolean)
-    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
-    .join(" ");
+  return stableTitleFromId(evalRecord.id);
 }
 
 function parseDelta(value: string): number {
@@ -146,9 +130,88 @@ function getEvidenceIdsFromEval(evalRecord: EvalRecord, fallbackEventId: string 
     ...evidenceFromRaw,
     ...(sourceFromRaw ? [sourceFromRaw] : []),
     ...(fallbackEventId ? [fallbackEventId] : []),
-    ...entityEventIds.slice(0, 3),
-  ]).slice(0, 6);
+    ...entityEventIds.slice(0, 4),
+  ]).slice(0, 8);
 }
+
+function parseLaneFromEvent(event: ThreadEvent | undefined): {
+  origin: { city: string; state: string; code: string };
+  destination: { city: string; state: string; code: string };
+} {
+  const fallback = {
+    origin: { city: "Dallas", state: "TX", code: "DAL" },
+    destination: { city: "Phoenix", state: "AZ", code: "PHX" },
+  };
+
+  if (!event) {
+    return fallback;
+  }
+
+  const lane = event.payload.lane;
+  if (!lane || typeof lane !== "object") {
+    return fallback;
+  }
+
+  const laneObj = lane as Record<string, unknown>;
+
+  const parsePoint = (
+    value: unknown,
+    fallbackPoint: { city: string; state: string; code: string },
+  ): { city: string; state: string; code: string } => {
+    if (typeof value === "string") {
+      return { ...fallbackPoint, code: value };
+    }
+
+    if (value && typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      return {
+        city: typeof obj.city === "string" ? obj.city : fallbackPoint.city,
+        state: typeof obj.state === "string" ? obj.state : fallbackPoint.state,
+        code: typeof obj.code === "string" ? obj.code : fallbackPoint.code,
+      };
+    }
+
+    return fallbackPoint;
+  };
+
+  return {
+    origin: parsePoint(laneObj.origin, fallback.origin),
+    destination: parsePoint(laneObj.destination, fallback.destination),
+  };
+}
+
+function getOrderDetails(entityType: EntityType, entityId: string, evidenceEventIds: string[]): EvalOrderDetails {
+  const laneSeed = evidenceEventIds.map((id) => eventsById[id]).find(Boolean);
+  const lane = parseLaneFromEvent(laneSeed);
+
+  const numericId = entityId.replace(/\D/g, "").slice(-4) || "0001";
+  const daySeed = Number(numericId) % 9;
+  const day = `${(20 + daySeed).toString().padStart(2, "0")}`;
+
+  const orderId = entityType === "load" ? entityId.toUpperCase() : `LD_${numericId}`;
+
+  return {
+    orderId,
+    custShipId: `CS-${7000 + Number(numericId)}`,
+    accountName: `Customer ${String.fromCharCode(65 + (Number(numericId) % 6))} Logistics`,
+    billToCode: `BT-${600 + (Number(numericId) % 150)}`,
+    origin: lane.origin,
+    destination: lane.destination,
+    tenderDate: `02/${day}/2026`,
+    pickupDate: `02/${(Number(day) + 1).toString().padStart(2, "0")}/2026`,
+    deliveryDate: `02/${(Number(day) + 2).toString().padStart(2, "0")}/2026`,
+  };
+}
+
+const allThreadEvents = getAllEvents();
+
+export const eventsById: Record<string, ThreadEvent> = allThreadEvents.reduce<Record<string, ThreadEvent>>(
+  (acc, event) => {
+    acc[event.id] = event;
+    return acc;
+  },
+  {},
+);
 
 function buildEvalRecord(
   evalRecord: EvalRecord,
@@ -161,19 +224,17 @@ function buildEvalRecord(
   const billed = parseAmount(evalRecord.observedValue);
   const expected = parseAmount(evalRecord.expectedValue);
   const variance = parseDelta(evalRecord.delta);
+  const exceptionTitle = getExceptionTitle(evalRecord);
 
   return {
     id: evalRecord.id,
-    title: toTitle(evalRecord.lineItem),
+    title: exceptionTitle,
     varianceAmount: variance,
     currency: "USD",
     entityType,
     entityId,
-    orderDetails: {
-      ...baseOrderDetails,
-      orderId: entityType === "load" ? entityId.toUpperCase() : baseOrderDetails.orderId,
-    },
-    exception: { title: toTitle(evalRecord.lineItem) },
+    orderDetails: getOrderDetails(entityType, entityId, evidenceEventIds),
+    exception: { title: exceptionTitle },
     lineItems: [
       {
         chargeCode: evalRecord.lineItem.toUpperCase(),
@@ -185,6 +246,8 @@ function buildEvalRecord(
     evidenceEventIds,
   };
 }
+
+export const evalsById: Record<string, EvalViewRecord> = {};
 
 for (const entityRecord of Object.values(entityViewDataByKey)) {
   const entityEventIds = entityRecord.eventLog.map((event) => event.id);
@@ -216,6 +279,25 @@ for (const entityRecord of Object.values(entityViewDataByKey)) {
   }
 }
 
+if (!evalsById["eval_ld_2"]) {
+  const firstLoadRecord = Object.values(entityViewDataByKey).find((record) => record.entityType === "load");
+  if (firstLoadRecord) {
+    const fallbackEvidence = firstLoadRecord.eventLog.slice(0, 5).map((event) => event.id);
+    evalsById["eval_ld_2"] = {
+      id: "eval_ld_2",
+      title: "Layover Charge Mismatch",
+      varianceAmount: -750,
+      currency: "USD",
+      entityType: "load",
+      entityId: firstLoadRecord.entityId,
+      orderDetails: getOrderDetails("load", firstLoadRecord.entityId, fallbackEvidence),
+      exception: { title: "Layover Charge Mismatch" },
+      lineItems: [{ chargeCode: "LAYOVER", billed: 0, expected: 750, variance: -750 }],
+      evidenceEventIds: fallbackEvidence,
+    };
+  }
+}
+
 function getActivityLabel(event: ThreadEvent): string {
   const entity = event.entity.charAt(0) + event.entity.slice(1).toLowerCase();
   const lifecycle = lifecycleLabelMap[event.lifecycle];
@@ -227,9 +309,8 @@ function getActorLabel(event: ThreadEvent): "Shipper" | "Carrier" {
 }
 
 function getProofText(event: ThreadEvent, message: ThreadMessage): string {
-  const mapped = proofTextByEventId[event.id];
-  if (mapped) {
-    return mapped;
+  if (typeof event.payload.proofText === "string" && event.payload.proofText.trim().length > 0) {
+    return event.payload.proofText;
   }
 
   const firstLine = message.body
@@ -293,4 +374,23 @@ export function getMessageForEvidenceEvent(eventId: string):
   }
 
   return { event, message };
+}
+
+export function getLoadIdForEval(evalId: string): string | undefined {
+  const evaluation = evalsById[evalId];
+  if (!evaluation) {
+    return undefined;
+  }
+
+  if (evaluation.entityType === "load") {
+    return evaluation.entityId;
+  }
+
+  const firstEvidence = evaluation.evidenceEventIds[0] ? eventsById[evaluation.evidenceEventIds[0]] : undefined;
+  const threadId = firstEvidence?.messageRef.threadId;
+  if (!threadId) {
+    return undefined;
+  }
+
+  return getAllEventsForThread(threadId).find((event) => event.entityType === "load")?.entityId;
 }

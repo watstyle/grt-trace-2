@@ -48,7 +48,7 @@ export function ToastHost() {
 
   return (
     <div className="pointer-events-none fixed right-4 top-4 z-[140]">
-      <div key={toast.id} className="copy-toast rounded-lg border border-zinc-700 bg-[#10141c] px-3 py-2 text-[12px] text-zinc-100 shadow-xl">
+      <div key={toast.id} className="copy-toast rounded-lg border border-[#343b48] bg-[#121722] px-3 py-2 text-[12px] text-zinc-100 shadow-xl">
         {toast.message}
       </div>
     </div>

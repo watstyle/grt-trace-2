@@ -43,6 +43,8 @@ const LIFECYCLE_GROUPS: { key: LifecycleGroupKey; label: string }[] = [
   { key: "rejected", label: "Rejected / Withdrawn / Cancelled" },
 ];
 
+const STATUS_BADGE_BASE = "inline-flex h-5 items-center rounded-md border px-2 text-[10px] font-semibold uppercase tracking-[0.06em] leading-none";
+
 function getEntityTitle(entityType: EntityType): string {
   if (entityType === "load") {
     return "Load";
@@ -51,6 +53,33 @@ function getEntityTitle(entityType: EntityType): string {
     return "Quote";
   }
   return "Charge";
+}
+
+function normalizeStatusLabel(status: unknown): string {
+  if (typeof status !== "string" || status.trim().length === 0) {
+    return "Unknown";
+  }
+
+  return status
+    .replace(/[_-]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function lifecycleChipClasses(status: unknown): string {
+  const normalized = typeof status === "string" ? status.toLowerCase() : "";
+  if (normalized === "confirmed") {
+    return "border-emerald-500/40 bg-emerald-500/15 text-emerald-200";
+  }
+  if (normalized === "rejected" || normalized === "withdrawn" || normalized === "cancelled") {
+    return "border-rose-500/40 bg-rose-500/15 text-rose-200";
+  }
+  if (normalized === "offered" || normalized === "requested") {
+    return "border-[#4d5a74] bg-[#1b2436] text-zinc-200";
+  }
+  return "border-[#3b4353] bg-[#141a24] text-zinc-300";
 }
 
 function parseLoadView(viewFromQuery: string | null, legacyTab: string | null): LoadViewKey {
@@ -238,6 +267,7 @@ function inferParentLoadId(record: EntityRecord): string | undefined {
 }
 
 function RelatedEntityList({ kind, items }: RelatedEntityListProps) {
+  const navigate = useNavigate();
   const grouped = useMemo(() => {
     return {
       confirmed: items.filter((item) => groupForLifecycle(item.lifecycle) === "confirmed"),
@@ -293,7 +323,6 @@ function RelatedEntityList({ kind, items }: RelatedEntityListProps) {
                           <th className="w-[124px] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
                             Observed
                           </th>
-                          <th className="w-[92px] px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -315,7 +344,8 @@ function RelatedEntityList({ kind, items }: RelatedEntityListProps) {
                           return (
                             <tr
                               key={item.id}
-                              className="border-b border-borderSubtle/70 text-[12px] text-zinc-300 transition hover:bg-[#171e2b]"
+                              onClick={() => navigate(`/entity/quote/${item.id}`)}
+                              className="cursor-pointer border-b border-borderSubtle/70 text-[12px] text-zinc-300 transition hover:bg-[#171e2b]"
                             >
                               <td className="px-3 py-2 align-top font-mono text-[11px] text-zinc-300">{item.id}</td>
                               <td className="px-3 py-2 align-top text-zinc-300">{formatLifecycleState(item.lifecycle)}</td>
@@ -326,15 +356,6 @@ function RelatedEntityList({ kind, items }: RelatedEntityListProps) {
                               <td className="px-3 py-2 align-top text-zinc-100">{lane.state}</td>
                               <td className="px-3 py-2 align-top">{renderJsonCell(referenceIds)}</td>
                               <td className="px-3 py-2 align-top text-[11px] text-zinc-400">{formatDateTime(item.observedAt)}</td>
-                              <td className="px-3 py-2 text-right align-top">
-                                <Link
-                                  to={`/entity/quote/${item.id}`}
-                                  className="inline-flex items-center whitespace-nowrap rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
-                                >
-                                  View
-                                  <GoIcon className="ml-1 h-3.5 w-3.5" />
-                                </Link>
-                              </td>
                             </tr>
                           );
                         })}
@@ -371,7 +392,6 @@ function RelatedEntityList({ kind, items }: RelatedEntityListProps) {
                           <th className="w-[124px] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
                             Observed
                           </th>
-                          <th className="w-[92px] px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -404,7 +424,8 @@ function RelatedEntityList({ kind, items }: RelatedEntityListProps) {
                           return (
                             <tr
                               key={item.id}
-                              className="border-b border-borderSubtle/70 text-[12px] text-zinc-300 transition hover:bg-[#171e2b]"
+                              onClick={() => navigate(`/entity/charge/${item.id}`)}
+                              className="cursor-pointer border-b border-borderSubtle/70 text-[12px] text-zinc-300 transition hover:bg-[#171e2b]"
                             >
                               <td className="px-3 py-2 align-top font-mono text-[11px] text-zinc-300">{item.id}</td>
                               <td className="px-3 py-2 align-top text-zinc-300">{formatLifecycleState(item.lifecycle)}</td>
@@ -415,15 +436,6 @@ function RelatedEntityList({ kind, items }: RelatedEntityListProps) {
                               <td className="px-3 py-2 align-top text-zinc-100">{lane.state}</td>
                               <td className="px-3 py-2 align-top">{renderJsonCell(referenceIds)}</td>
                               <td className="px-3 py-2 align-top text-[11px] text-zinc-400">{formatDateTime(item.observedAt)}</td>
-                              <td className="px-3 py-2 text-right align-top">
-                                <Link
-                                  to={`/entity/charge/${item.id}`}
-                                  className="inline-flex items-center whitespace-nowrap rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
-                                >
-                                  View
-                                  <GoIcon className="ml-1 h-3.5 w-3.5" />
-                                </Link>
-                              </td>
                             </tr>
                           );
                         })}
@@ -567,9 +579,20 @@ function LoadEntityDetailView({ entityId, record }: LoadEntityDetailViewProps) {
       },
       tms: {
         loadNumber: "TMS-40177",
-        quoteId: "q_31",
-        chargeIds: ["c_10"],
-        amount: 2088,
+        quoteId:
+          typeof record.canonicalState.selectedQuoteId === "string"
+            ? record.canonicalState.selectedQuoteId
+            : quoteSummaries[0]?.id ?? null,
+        chargeIds:
+          Array.isArray(record.canonicalState.chargeIds) && record.canonicalState.chargeIds.length > 0
+            ? (record.canonicalState.chargeIds as string[])
+            : chargeSummaries.slice(0, 2).map((entry) => entry.id),
+        amount:
+          typeof record.canonicalState.totalAmount === "number"
+            ? record.canonicalState.totalAmount
+            : typeof record.canonicalState.total === "number"
+              ? record.canonicalState.total
+              : 0,
         currency: "USD",
       },
       extracted: {
@@ -582,21 +605,37 @@ function LoadEntityDetailView({ entityId, record }: LoadEntityDetailViewProps) {
         { field: "total_amount", expected: 2060, observed: 2088, result: "mismatch" },
       ],
     }),
-    [entityId, record.canonicalState.chargeIds, record.canonicalState.lane, record.canonicalState.selectedQuoteId, record.canonicalState.updatedAt, selectedEvent?.id, selectedEvent?.observedAt],
+    [
+      chargeSummaries,
+      entityId,
+      quoteSummaries,
+      record.canonicalState.chargeIds,
+      record.canonicalState.lane,
+      record.canonicalState.selectedQuoteId,
+      record.canonicalState.total,
+      record.canonicalState.totalAmount,
+      record.canonicalState.updatedAt,
+      selectedEvent?.id,
+      selectedEvent?.observedAt,
+    ],
   );
+  const lifecycleStatus = normalizeStatusLabel(record.canonicalState.status);
 
   return (
     <div className="dark h-screen bg-[#08090c] font-sans text-zinc-100 antialiased">
       <TopBar
         title={
-          <span className="inline-flex items-center gap-2">
+          <span className="inline-flex min-w-0 items-center gap-2 whitespace-nowrap">
             <span>Load: {entityId}</span>
             <CopyIconButton value={entityId} label="Load ID" />
+            <span className={`${STATUS_BADGE_BASE} ${lifecycleChipClasses(record.canonicalState.status)}`}>
+              {lifecycleStatus}
+            </span>
           </span>
         }
       />
 
-      <section className="flex h-12 items-end border-b border-borderSubtle bg-[#0d1016] px-4">
+      <section className="flex h-12 items-end border-b border-borderSubtle bg-[#0f1115] px-4">
         <nav className="flex items-center gap-4">
           {loadTabs.map((tab) => (
             <button
@@ -620,7 +659,7 @@ function LoadEntityDetailView({ entityId, record }: LoadEntityDetailViewProps) {
           <div className="grid h-full grid-cols-[320px_600px_minmax(0,1fr)]">
             <section className="flex min-h-0 flex-col border-r border-borderSubtle bg-panel">
               <header className="z-10 flex h-12 items-center border-b border-borderSubtle bg-panel/95 px-4">
-                <div className="inline-flex items-center gap-1 rounded-lg border border-borderSubtle bg-[#10141c] p-1">
+                <div className="inline-flex items-center gap-1 rounded-lg border border-borderSubtle bg-[#121722] p-1">
                   {VALID_EVENT_FILTERS.map((filter) => (
                     <button
                       key={filter}
@@ -629,7 +668,7 @@ function LoadEntityDetailView({ entityId, record }: LoadEntityDetailViewProps) {
                       className={`rounded-md px-2 py-1 text-[11px] font-medium capitalize transition ${
                         eventFilter === filter
                           ? "bg-[#1c2433] text-zinc-100"
-                          : "text-zinc-400 hover:bg-[#171c26] hover:text-zinc-200"
+                          : "text-zinc-400 hover:bg-[#171e2b] hover:text-zinc-200"
                       }`}
                     >
                       {filter}
@@ -664,13 +703,18 @@ function LoadEntityDetailView({ entityId, record }: LoadEntityDetailViewProps) {
             </Panel>
 
             <Panel
-              title="Message"
+              title={
+                <span className="inline-flex items-center gap-2">
+                  Message: <span className="font-mono text-[12px] text-zinc-400">{selectedEvent?.messageRef.messageId ?? "-"}</span>
+                  {selectedEvent ? <CopyIconButton value={selectedEvent.messageRef.messageId} label="Message ID" /> : null}
+                </span>
+              }
               stickyHeader
               headerRight={
                 selectedEvent ? (
                   <Link
                     to={`/thread/${selectedEvent.messageRef.threadId}?messageId=${selectedEvent.messageRef.messageId}&eventId=${selectedEvent.id}`}
-                    className="inline-flex items-center rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                    className="inline-flex items-center rounded-full border border-[#343b48] bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-[#4d5a74] hover:text-zinc-100"
                   >
                     View Thread
                     <GoIcon className="ml-1 h-3.5 w-3.5" />
@@ -727,8 +771,8 @@ function LoadEntityDetailView({ entityId, record }: LoadEntityDetailViewProps) {
             onClick={handleCloseEvalJson}
             className="absolute inset-0 bg-black/55"
           />
-          <aside className="absolute inset-y-0 right-0 z-10 w-[min(820px,94vw)] border-l border-borderSubtle bg-[#0b0f15] shadow-2xl">
-            <header className="flex h-14 items-center justify-between border-b border-borderSubtle bg-[#10141c] px-4">
+          <aside className="absolute inset-y-0 right-0 z-10 w-[min(820px,94vw)] border-l border-borderSubtle bg-[#0f1115] shadow-2xl">
+            <header className="flex h-14 items-center justify-between border-b border-borderSubtle bg-[#121722] px-4">
               <div className="min-w-0">
                 <p className="inline-flex items-center gap-2 truncate text-[13px] font-semibold tracking-[-0.01em] text-zinc-100">
                   <span>Evaluation: <span className="font-mono text-[12px] text-zinc-400">{evalJson.id}</span></span>
@@ -739,7 +783,7 @@ function LoadEntityDetailView({ entityId, record }: LoadEntityDetailViewProps) {
                 type="button"
                 aria-label="Close evaluation JSON"
                 onClick={handleCloseEvalJson}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#343b48] text-zinc-300 transition hover:border-[#4d5a74] hover:bg-[#171e2b]"
               >
                 ×
               </button>
@@ -789,6 +833,7 @@ function StandardEntityDetailView({ entityType, entityId, record }: StandardEnti
     ? selectedSnapshot.evals.find((evaluation) => evaluation.id === evalJsonIdFromQuery)
     : undefined;
   const parentLoadId = inferParentLoadId(record);
+  const lifecycleStatus = normalizeStatusLabel(record.canonicalState.status);
 
   useEffect(() => {
     const nextParams = new URLSearchParams(searchParams);
@@ -856,23 +901,28 @@ function StandardEntityDetailView({ entityType, entityId, record }: StandardEnti
       <div className="dark h-screen bg-[#08090c] font-sans text-zinc-100 antialiased">
         <TopBar
           title={
-            <span className="inline-flex items-center gap-2">
+            <span className="inline-flex min-w-0 items-center gap-2 whitespace-nowrap">
               <span>{getEntityTitle(entityType)}: {entityId}</span>
               <CopyIconButton value={entityId} label={`${getEntityTitle(entityType)} ID`} />
-              {parentLoadId ? (
-                <Link
-                  to={`/entity/load/${parentLoadId}`}
-                  className="inline-flex items-center rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
-                >
-                  Load: {parentLoadId}
-                  <GoIcon className="ml-1 h-3.5 w-3.5" />
-                </Link>
-              ) : null}
+              <span className={`${STATUS_BADGE_BASE} ${lifecycleChipClasses(record.canonicalState.status)}`}>
+                {lifecycleStatus}
+              </span>
             </span>
+          }
+          rightContent={
+            parentLoadId ? (
+              <Link
+                to={`/entity/load/${parentLoadId}`}
+                className="inline-flex h-6 items-center rounded-full border border-[#343b48] bg-[#171b24] px-2.5 text-[11px] leading-none text-zinc-300 transition hover:border-[#4d5a74] hover:text-zinc-100"
+              >
+                Load: {parentLoadId}
+                <GoIcon className="ml-1 h-3.5 w-3.5" />
+              </Link>
+            ) : null
           }
         />
 
-        <section className="flex h-12 items-end border-b border-borderSubtle bg-[#0d1016] px-4">
+        <section className="flex h-12 items-end border-b border-borderSubtle bg-[#0f1115] px-4">
           <nav className="flex items-center gap-4">
             {nonLoadTabs.map((tab) => (
               <button
@@ -920,13 +970,18 @@ function StandardEntityDetailView({ entityType, entityId, record }: StandardEnti
               </Panel>
 
               <Panel
-                title="Message"
+                title={
+                  <span className="inline-flex items-center gap-2">
+                    Message: <span className="font-mono text-[12px] text-zinc-400">{selectedEvent?.messageRef.messageId ?? "-"}</span>
+                    {selectedEvent ? <CopyIconButton value={selectedEvent.messageRef.messageId} label="Message ID" /> : null}
+                  </span>
+                }
                 stickyHeader
                 headerRight={
                   selectedEvent ? (
                     <Link
                       to={`/thread/${selectedEvent.messageRef.threadId}?messageId=${selectedEvent.messageRef.messageId}&eventId=${selectedEvent.id}`}
-                      className="inline-flex items-center rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                      className="inline-flex items-center rounded-full border border-[#343b48] bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 transition hover:border-[#4d5a74] hover:text-zinc-100"
                     >
                       View Thread
                       <GoIcon className="ml-1 h-3.5 w-3.5" />
@@ -966,8 +1021,8 @@ function StandardEntityDetailView({ entityType, entityId, record }: StandardEnti
             onClick={handleCloseEvalJson}
             className="absolute inset-0 bg-black/55"
           />
-          <aside className="absolute inset-y-0 right-0 z-10 w-[min(820px,94vw)] border-l border-borderSubtle bg-[#0b0f15] shadow-2xl">
-            <header className="flex h-14 items-center justify-between border-b border-borderSubtle bg-[#10141c] px-4">
+          <aside className="absolute inset-y-0 right-0 z-10 w-[min(820px,94vw)] border-l border-borderSubtle bg-[#0f1115] shadow-2xl">
+            <header className="flex h-14 items-center justify-between border-b border-borderSubtle bg-[#121722] px-4">
               <div className="min-w-0">
                 <p className="inline-flex items-center gap-2 truncate text-[13px] font-semibold tracking-[-0.01em] text-zinc-100">
                   <span>Evaluation: <span className="font-mono text-[12px] text-zinc-400">{evalJson.id}</span></span>
@@ -978,7 +1033,7 @@ function StandardEntityDetailView({ entityType, entityId, record }: StandardEnti
                 type="button"
                 aria-label="Close evaluation JSON"
                 onClick={handleCloseEvalJson}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#343b48] text-zinc-300 transition hover:border-[#4d5a74] hover:bg-[#171e2b]"
               >
                 ×
               </button>

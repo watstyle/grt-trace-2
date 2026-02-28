@@ -13,7 +13,7 @@ const TABS: { key: EntityTabKey; label: string }[] = [
 
 export function Tabs({ value, onChange }: TabsProps) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-borderSubtle bg-[#10141c] p-1">
+    <div className="inline-flex items-center gap-1 rounded-lg border border-borderSubtle bg-[#121722] p-1">
       {TABS.map((tab) => (
         <button
           key={tab.key}
@@ -22,7 +22,7 @@ export function Tabs({ value, onChange }: TabsProps) {
           className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
             value === tab.key
               ? "bg-[#1c2433] text-zinc-100"
-              : "text-zinc-400 hover:bg-[#171c26] hover:text-zinc-200"
+              : "text-zinc-400 hover:bg-[#171e2b] hover:text-zinc-200"
           }`}
         >
           {tab.label}

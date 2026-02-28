@@ -15,14 +15,14 @@ export function EvalCard({ evaluation, onOpen }: EvalCardProps) {
           <p className="text-[11px] text-zinc-400">Eval: {evaluation.id}</p>
         </div>
         <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-            evaluation.status === "PASS"
-              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
-              : evaluation.status === "FAIL"
-                ? "border-rose-500/50 bg-rose-500/10 text-rose-300"
-                : "border-zinc-500/50 bg-zinc-500/10 text-zinc-300"
-          }`}
-        >
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+              evaluation.status === "PASS"
+                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+                : evaluation.status === "FAIL"
+                  ? "border-rose-500/50 bg-rose-500/10 text-rose-300"
+                  : "border-[#3b4353] bg-[#1b202b] text-zinc-300"
+            }`}
+          >
           {evaluation.status}
         </span>
       </div>
@@ -49,7 +49,7 @@ export function EvalCard({ evaluation, onOpen }: EvalCardProps) {
         <button
           type="button"
           onClick={() => onOpen(evaluation.id)}
-          className="inline-flex items-center rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 hover:border-zinc-500 hover:text-zinc-100"
+          className="inline-flex items-center rounded-full border border-[#343b48] bg-[#171b24] px-2.5 py-1 text-[11px] text-zinc-300 hover:border-[#4d5a74] hover:text-zinc-100"
         >
           View
           <GoIcon className="ml-1 h-3.5 w-3.5" />

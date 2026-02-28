@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSidebar } from "./SidebarContext";
+import groundTruthLogo from "../assets/groundtruth-logo-light.svg";
 import {
-  AuditIcon,
   ChargesIcon,
-  EntitiesIcon,
   EvaluationsIcon,
   ExceptionsIcon,
   LoadsIcon,
@@ -15,11 +14,10 @@ import {
 type SidebarViewKey = "threads" | "loads" | "quotes" | "charges" | "evaluations" | "exceptions";
 type SidebarIcon = typeof ThreadsIcon;
 
-const MENU_SECTIONS: { label?: string; sectionIcon?: SidebarIcon; items: { key: SidebarViewKey; label: string; icon: SidebarIcon }[] }[] = [
+const MENU_SECTIONS: { label?: string; items: { key: SidebarViewKey; label: string; icon: SidebarIcon }[] }[] = [
   { label: "Sources", items: [{ key: "threads", label: "Threads", icon: ThreadsIcon }] },
   {
     label: "Entities",
-    sectionIcon: EntitiesIcon,
     items: [
       { key: "loads", label: "Loads", icon: LoadsIcon },
       { key: "quotes", label: "Quotes", icon: QuotesIcon },
@@ -28,7 +26,6 @@ const MENU_SECTIONS: { label?: string; sectionIcon?: SidebarIcon; items: { key: 
   },
   {
     label: "Audit",
-    sectionIcon: AuditIcon,
     items: [
       { key: "evaluations", label: "Evaluations", icon: EvaluationsIcon },
       { key: "exceptions", label: "Exceptions", icon: ExceptionsIcon },
@@ -77,7 +74,7 @@ function MenuButton({
       type="button"
       onClick={onClick}
       className={`w-full rounded-md px-2.5 py-1.5 text-left text-[12px] font-medium transition ${
-        active ? "bg-[#1c2433] text-zinc-100" : "text-zinc-400 hover:bg-[#171c26] hover:text-zinc-200"
+        active ? "bg-[#1c2433] text-zinc-100" : "text-zinc-400 hover:bg-[#171e2b] hover:text-zinc-200"
       }`}
     >
       <span className="inline-flex items-center gap-2">
@@ -120,7 +117,12 @@ export function GlobalSidebar() {
         aria-hidden={!isOpen}
       >
         <div className="flex h-full min-h-0 flex-col">
-          <header className="border-b border-borderSubtle bg-panelMuted p-3">
+          <header className="border-b border-borderSubtle bg-panelMuted px-3 pb-4 pt-5">
+            <img
+              src={groundTruthLogo}
+              alt="GroundTruth"
+              className="mb-4 h-6 w-auto max-w-[220px] opacity-95"
+            />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -130,7 +132,7 @@ export function GlobalSidebar() {
               }
             }}
             placeholder="Search any ID"
-            className="w-full rounded-lg border border-borderSubtle bg-[#10141c] px-3 py-2 text-[12px] text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-zinc-500"
+            className="w-full rounded-lg border border-borderSubtle bg-[#121722] px-3 py-2 text-[12px] text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-[#4d5a74]"
           />
           </header>
 
@@ -138,10 +140,7 @@ export function GlobalSidebar() {
           {MENU_SECTIONS.map((section, index) => (
             <div key={index} className={index > 0 ? "mt-3" : ""}>
               {section.label ? (
-                <p className="mb-1 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
-                  {section.sectionIcon ? <section.sectionIcon className="h-3 w-3 text-zinc-500" /> : null}
-                  <span>{section.label}</span>
-                </p>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">{section.label}</p>
               ) : null}
               <div className="space-y-1">
                 {section.items.map((item) => (

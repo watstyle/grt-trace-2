@@ -18,7 +18,7 @@ export function EventDetail({ event, onClose }: EventDetailProps) {
               Event: <span className="font-mono text-[12px] text-zinc-400">{event.id}</span>
               <CopyIconButton value={event.id} label="Event ID" />
               <Link
-                className="inline-flex items-center rounded-full border border-zinc-700 bg-[#171b24] px-2.5 py-1 text-[11px] font-normal text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+                className="inline-flex items-center rounded-full border border-[#343b48] bg-[#171b24] px-2.5 py-1 text-[11px] font-normal text-zinc-300 transition hover:border-[#4d5a74] hover:text-zinc-100"
                 to={`/entity/${event.entityType}/${event.entityId}?eventId=${event.id}&tab=message`}
               >
                 View Entity
@@ -32,7 +32,7 @@ export function EventDetail({ event, onClose }: EventDetailProps) {
             type="button"
             aria-label="Close event detail"
             onClick={onClose}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-700 text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/70"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#343b48] text-zinc-300 transition hover:border-[#4d5a74] hover:bg-[#171e2b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#60a5fa]/70"
           >
             ×
           </button>

@@ -99,17 +99,17 @@ export function EvalOverview({ evaluation }: EvalOverviewProps) {
         </div>
 
         <div className="px-4 py-3">
-          <div className="mb-3 rounded-lg border border-rose-500/50 bg-rose-500/15 px-3 py-2 text-[13px] font-medium text-rose-200">
+          <div className="mb-3 rounded-lg border border-rose-500/45 bg-rose-500/10 px-3 py-2 text-[13px] font-medium text-rose-200">
             ⚠ {evaluation.exception.title}
           </div>
 
           <div className="overflow-hidden rounded-lg border border-borderSubtle bg-[#0f1218]">
             <table className="w-full border-collapse text-left text-[12px]">
-              <thead className="bg-[#10151f] text-zinc-400">
+              <thead className="bg-[#121722] text-zinc-400">
                 <tr>
                   <th className="border-b border-borderSubtle px-3 py-2 font-medium">Charge</th>
                   <th className="border-b border-borderSubtle px-3 py-2 font-medium">Billed (TMS)</th>
-                  <th className="border-b border-borderSubtle px-3 py-2 font-medium text-emerald-300">Expected</th>
+                  <th className="border-b border-borderSubtle px-3 py-2 font-medium text-zinc-200">Expected</th>
                   <th className="border-b border-borderSubtle px-3 py-2 font-medium">Variance</th>
                 </tr>
               </thead>
@@ -118,12 +118,12 @@ export function EvalOverview({ evaluation }: EvalOverviewProps) {
                   <tr key={item.chargeCode} className="text-zinc-200">
                     <td className="border-b border-borderSubtle px-3 py-2.5">{item.chargeCode}</td>
                     <td className="border-b border-borderSubtle px-3 py-2.5">{formatCurrency(item.billed)}</td>
-                    <td className="border-b border-borderSubtle px-3 py-2.5 text-emerald-300">
+                    <td className="border-b border-borderSubtle px-3 py-2.5 text-zinc-200">
                       {formatCurrency(item.expected)}
                     </td>
                     <td
                       className={`border-b border-borderSubtle px-3 py-2.5 ${
-                        item.variance < 0 ? "text-rose-300" : "text-zinc-200"
+                        item.variance < 0 ? "text-zinc-200" : "text-zinc-200"
                       }`}
                     >
                       {item.variance < 0
